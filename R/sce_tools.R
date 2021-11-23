@@ -1,0 +1,574 @@
+#' @importFrom magrittr %>%
+#' @importFrom dplyr if_else
+#' @importFrom stats quantile integrate optim optimize
+
+# handles NAs and transforms non-NAs to [0,1] interva
+# (used for raw SCE data)
+transform_p <- function(x){
+  out <- x
+  out[is.na(x)] <- 0
+  (out/100)
+}
+
+# function to check vector of probabilities
+check_p <- function(p, SCE = FALSE){
+  if (!is.vector(p)){
+    stop("p must be a vector")
+  }
+  if (any(is.na(p))){
+    stop("NAs in p cannot be handled")
+  }
+  if (any(p < 0) | any(p > 1)){
+    stop("p contains values outside [0,1] interval")
+  }
+  if (abs(sum(p)-1) > 1e-10){
+    stop("Values in p do not sum to one")
+  }
+  if (SCE){
+    if (length(p) != 10){
+      stop("p must contain 10 elements, in line with SCE question format")
+    }
+  }
+}
+
+# function to check vector of upper bounds
+check_ub <- function(ub, SCE = FALSE){
+  if (SCE){
+    ub_sce <- c(-12, -8, -4, -2, 0, 2, 4, 8, 12, Inf)
+    if (any(ub != ub_sce)){
+      stop("Upper bounds do not conform to SCE format")
+    }
+  }
+  if (any(diff(ub) <= 0)){
+    stop("Upper bounds must be strictly increasing")
+  }
+}
+
+#' Functions for the (Expected) Ranked Probability Score
+#'
+#' @param p Vector of probabilities (must be positive and sum to one)
+#' @param kstar, realizing category (integer, min = 1, max = length(p))
+#' @return \code{erps} returns the Expected Ranked Probability Score (ERPS), a single number (vector of length one).
+#' \code{rps} returns the Ranked Probability Score (RPS).
+#' @details Krüger and Pavlova (2020) propose to use the ERPS as a robust measure
+#' of the uncertainty in a survey histogram. The RPS is due to Epstein (1969).
+#' See also Section 4.2 in Krüger and Pavlova (2020).
+#' @references
+#' Epstein, E.S. (1969): `A Scoring System for Probability Forecasts of Ranked Categories', Journal of Applied Meteorology and Climatology 8, 985-987.
+#'
+#' Krüger, F., and L. Pavlova (2020): `Quantifying Subjective
+#' Uncertainty in Survey Expectations'. Working Paper, \doi{10.18452/21401}.
+#' @name rps_tools
+NULL
+
+#' @rdname rps_tools
+#' @export
+erps <- function(p){
+  check_p(p)
+  P <- cumsum(p)
+  sum(P*(1-P))
+}
+
+#' Helper function to convert numerical realization into bin indicator
+#'
+#' @export
+#' @param y numerical value
+#' @param ub vector of upper bounds of histogram bin ranges
+num_to_bin <- function(y, ub){
+  check_ub(ub, SCE = TRUE)
+  min(which(y <= ub))
+}
+
+#' @export
+#' @rdname rps_tools
+rps <- function(p, kstar){
+  P <- cumsum(p)
+  K <- length(p)
+  if (kstar == 1){
+    sum((1-P)^2)
+  } else {
+    ( sum(P[1:(kstar-1)]^2) + sum((1-P[kstar:K])^2) )
+  }
+}
+
+# Fast version of rps (here p is a matrix of probability forecasts)
+rps_mat <- function(p, kstar){
+  P <- apply(p, 1, cumsum) %>% t
+  K <- ncol(p)
+  if (kstar == 1){
+    rowSums((1-P)^2)
+  } else {
+    ( rowSums(P[,1:(kstar-1),drop = FALSE]^2) + rowSums((1-P[,kstar:K,drop = FALSE])^2) )
+  }
+}
+
+#' Function to visualize SCE histogram forecast using ggplot2
+#'
+#' @import ggplot2
+#' @export
+#' @param x object of class `forecasthistogram'
+#' @param ... additional parameters (currently not in use)
+#' @param outer_width support extension in case of infinite limits
+#' @param ylim support limit for vertical axis (defaults to \code{NULL}, useful to make several comparable plots)
+#' @return plot (ggplot2 object)
+plot.forecasthistogram <- function(x, ylim = NULL, outer_width = 3, ...){
+  ub <- x$ub
+  p <- x$p
+  # checks
+  check_ub(ub)
+  check_p(p)
+  # length of p vector
+  lp <- length(p)
+  # replace rightmost limit if it is infinite
+  if (ub[lp] == Inf){
+    ub[lp] <- ub[lp-1] + outer_width
+  }
+  # vector of bin widths
+  bin_widths <- c(outer_width, diff(ub))
+  # Transform probs (divide by bin width)
+  p_t <- p/bin_widths
+  # Auxiliary data frame
+  d <- data.frame(x1 = c(ub[1] - outer_width, ub[-lp]),
+                  x2 = c(ub[-lp], ub[lp]),
+                  y1 = rep(0, lp),
+                  y2 = p_t)
+  # Make plot
+  g <- ggplot(d, aes(xmin=x1, xmax=x2, ymin=y1, ymax=y2)) +
+    geom_rect(col = "black", alpha = .5) + theme_minimal() +
+    scale_x_continuous(breaks = ub[-lp]) +
+    theme(panel.grid.major.x = element_blank(),
+          panel.grid.minor.x = element_blank(),
+          panel.grid.major.y = element_line(size=.1, color="black"),
+          text = element_text(size = 20))
+  if (!is.null(ylim)){
+    g <- g + ylim(ylim)
+  }
+  # Add curve
+  if (x$method == "gbeta"){
+    ff <- function(z){
+      ret <- auxf(z, a = x$parameters[1], b = x$parameters[2],
+                  l = x$parameters[3], r = x$parameters[4])
+      ret[is.na(ret)] <- 0
+      ret
+    }
+  } else {
+    ff <- function(z){
+      dtri(z, a = x$parameters[1], b = x$parameters[2],
+           c = x$parameters[3])
+    }
+  }
+  g <- g +
+    stat_function(fun = ff, n = 1000, geom = "line",
+                  size = I(1.4)) + ylab("")
+  g
+}
+
+# Function to numerically recover quantile from CDF function
+q_from_cdf <- function(cdf, alpha, lims){
+  d_f <- function(x){
+    (cdf(x)-alpha)^2
+  }
+  out_tmp <- optimize(d_f, interval = lims)
+  if (out_tmp$objective > 1e-6){
+    stop("Failed to find quantile")
+  } else {
+    out_tmp$minimum
+  }
+}
+
+# Vectorized version of function q_from_cdf
+get_q <- function(cdf, lims, quantile_levels = c(.25, .5, .75)){
+  q <- rep(NA, length(quantile_levels))
+  for (jj in seq_along(quantile_levels)){
+    q[jj] <- q_from_cdf(cdf, alpha = quantile_levels[jj], lims = lims)
+  }
+  q
+}
+
+# Helper function to check whether non-zero histogram bins are next to each other
+is_adjacent <- function(p){
+  aux <- which(p != 0)
+  out <- if_else(all(diff(aux) == 1), TRUE, FALSE)
+  out
+}
+
+#' Fit parametric distribution to histogram probabilities
+#'
+#' @param ub vector of upper bounds of histogram bins
+#' @param p vector of probabilities (positive, summing to one)
+#' @param fit_support whether to choose support according to statistical criterium (default is \code{TRUE})
+#' @param support_limit defaults to 38 (relevant only if \code{fit_support == FALSE})
+#' @return object of class `forecasthistogram'. Use function \code{quantile.forecasthistogram} to compute quantiles, \code{plot.forecasthistogram} for plotting,
+#' \code{mean.forecasthistogram} and \code{var.forecasthistogram} for computing implied mean and variance.
+#' @details The function fits a parametric distribution based on the histogram probabilities in \code{p}. The fitting procedure has been proposed by
+#' Engelberg et al. (2009). Briefly, the method fits a generalized beta distribution if \code{p} features 3 or more bins,
+#' and fits a simpler triangular distribution if \code{p} features at most two bins. See Krüger and Pavlova (2020, Appendix A) for details on the
+#' present implementation.
+#' @references
+#' Engelberg, J., Manski, C.F., and J. Williams (2009): `Comparing the Point Predictions
+#' and Subjective Probability Distributions of Professional Forecasters', Journal of Business & Economic Statistics 27,
+#' 30-41, \doi{10.1198/jbes.2009.0003}
+#'
+#' Krüger, F., and L. Pavlova (2020): `Quantifying Subjective
+#' Uncertainty in Survey Expectations'. Working Paper, \doi{10.18452/21401}.
+fit_hist_emw <- function(ub, p, fit_support = TRUE, support_limit = 38){
+  nr_bins <- sum(p != 0)
+  if (nr_bins < 3){
+    if (!is_adjacent(p)){
+      stop("In the two-bin case, EWM procedure requires adjacent bins")
+    }
+    aux <- fit_hist_triangle(ub, p)
+    mth <- "triangle"
+  } else {
+    aux <- fit_hist_gb(ub, p, fit_support, support_limit)
+    mth <- "gbeta"
+  }
+  aux$method <- mth
+  aux$ub <- ub
+  aux$p <- p
+  aux$fit_support <- fit_support
+  structure(aux, class = "forecasthistogram")
+}
+
+#' Compute quantiles of fitted histogram
+#' @export
+#' @param x object of class \code{forecasthistogram}
+#' @param probs quantile levels
+#' @param ... additional parameters, currently not in use
+quantile.forecasthistogram <- function(x, probs = (1:9)/10, ...){
+  tmp <- get_q(cdf = x$CDF, lims = x$support,
+               quantile_levels = probs)
+  names(tmp) <- paste0(probs*100, "%")
+  tmp
+}
+
+#' Compute mean of fitted histogram
+#' @export
+#' @param x object of class \code{forecasthistogram}
+#' @param ... additional parameters, currently not in use
+mean.forecasthistogram <- function(x, ...){
+  x$moments[1]
+}
+
+fit_hist_gb <- function(ub, p, fit_support = TRUE, support_limit = 38){
+  # checks
+  check_ub(ub)
+  check_p(p)
+  # largest finite value in ub
+  largest_finite <- max(ub[ub < Inf])
+  # Get support of histogram
+  aux <- get_hist_support(ub, p)
+  l <- aux$l
+  r <- aux$r
+  # Optional: Fix support
+  # (kicks in only if support is unknown, i.e. null)
+  if (!fit_support){
+    if (is.null(l)) l <- -support_limit
+    if (is.null(r)) r <- support_limit
+  }
+  # Estimate free parameters
+  # Four scenarios, depending on whether left and/or right
+  # limit of support is estimated
+  if (is.null(l) & is.null(r)){
+    # both limits unknown
+    ff <- function(th){
+      tmp <- pgbeta(ub, a = exp(th[1]) + 1,
+                    b = exp(th[2]) + 1, l = th[3], r = th[4])
+      mean((cumsum(p) - tmp)^2)
+    }
+    th0 <- c(0, 0, ub[1]-2, largest_finite + 2)
+    cs <- 1
+  } else if (is.null(l) & !is.null(r)){
+    # left limit unknown, right limit known
+    ff <- function(th){
+      tmp <- pgbeta(ub, a = exp(th[1]) + 1,
+                    b = exp(th[2]) + 1, l = th[3], r = r)
+      mean((cumsum(p) - tmp)^2)
+    }
+    th0 <- c(0, 0, ub[1] - 2)
+    cs <- 2
+  } else if (!is.null(l) & is.null(r)){
+    # left limit known, right limit unknown
+    ff <- function(th){
+      tmp <- pgbeta(ub, a = exp(th[1]) + 1,
+                    b = exp(th[2]) + 1, l = l, r = th[3])
+      mean((cumsum(p) - tmp)^2)
+    }
+    th0 <- c(0, 0, largest_finite + 2)
+    cs <- 3
+  } else if (!is.null(l) & !is.null(r)){
+    # both limits known
+    ff <- function(th){
+      tmp <- pgbeta(ub, a = exp(th[1]) + 1,
+                    b = exp(th[2]) + 1,
+                    l = l, r = r)
+      mean((cumsum(p) - tmp)^2)
+    }
+    th0 <- c(0, 0)
+    cs <- 4
+  }
+  # Can be used for debugging (print parameter guesses)
+  #ff2 <- function(par){
+    #par %>% paste(collapse = "_") %>% print
+    #return(ff(par))
+  #}
+  # Modify objective function
+  # (Assign penalty when beta dist parameters get too large)
+  # Following Armantier et al (2017, Appendix C): Set
+  # maximal support limit to +/- 38
+  # Also impose support limit greater than 12 since
+  # the SCE bins end there
+  if (cs == 1){
+    # both limits unknown
+    ff2 <- function(th){
+      if_else(any(th[1:2] > 3.5) |
+                (th[3] > ub[1]) |
+                (th[4] < largest_finite), 10, ff(th))
+    }
+  } else if (cs == 2){
+    # only left limit unknown
+    ff2 <- function(th){
+      if_else(any(th[1:2] > 3.5) |
+                (th[3] > ub[1]), 10, ff(th))
+    }
+  } else if (cs == 3){
+    # only right limit unknown
+    ff2 <- function(th){
+      if_else(any(th[1:2] > 3.5) |
+                (th[3] < largest_finite), 10, ff(th))
+    }
+  } else if (cs == 4){
+    # both limits known
+    ff2 <- function(th){
+      if_else(any(th[1:2] > 3.5), 10, ff(th))
+    }
+  }
+
+  # Run optimizer
+  aux <- optim(th0, ff2)$par
+  # Throw error if optimal parameters equal starting values
+  if (any(aux == th0)){
+    stop("Optimization seems to have failed")
+  }
+  # Compute transformed parameters and support limits
+  if (cs == 1){
+    pms <- c(exp(aux[1:2]) + 1, aux[3:4])
+  } else if (cs == 2){
+    pms <- c(exp(aux[1:2]) + 1, aux[3], r)
+  } else if (cs == 3){
+    pms <- c(exp(aux[1:2]) + 1, l, aux[3])
+  } else if (cs == 4){
+    pms <- c(exp(aux[1:2]) + 1, l, r)
+  }
+  # CDF
+  CDF <- function(x){
+    pgbeta(x, a = pms[1], b = pms[2],
+           l = pms[3], r = pms[4])
+  }
+  # Support
+  support <- c(pms[3], pms[4])
+  # Moments
+  moments <- moments_gb(pms[1], pms[2], pms[3], pms[4]) %>%
+    unlist %>% unname
+  # Return
+  list(parameters = pms, CDF = CDF,
+       support = support, moments = moments)
+}
+
+# Helper function for beta distribution
+auxf <- function(z, a, b, l, r){
+  d <- (beta(a,b)*((r-l)^(a+b-1)))
+  out <- ((z-l)^(a-1))*((r-z)^(b-1))/d
+  out
+}
+
+# CDF of generalized Beta distribution
+# (Engelberg et al, Equation 1)
+pgbeta <- function(x, a, b, l, r){
+  out <- rep(0, length(x))
+  ind1 <- which((x > l) & (x <= r))
+  ind2 <- which(x > r)
+  out[ind2] <- 1
+  for (jj in ind1){
+    tmp <- integrate(auxf, a = a, b = b,
+                     l = l, r = r, lower = l,
+                     upper = x[jj])$value
+    out[jj] <- tmp
+  }
+  # Cut off at one
+  out[out > 1] <- 1
+  out
+}
+
+plot_gb <- function(a, b, l, r){
+  rg <- seq(from = l, to = r, length.out = 1001)
+  y <- auxf(rg, a, b, l, r)
+  plot(rg, y, bty = "n", type = "l",
+       xlab = "x", ylab = "f(x)")
+}
+
+moments_gb <- function(a, b, l, r){
+  ff1 <- function(z) z*auxf(z, a = a, b = b, l = l, r = r)
+  m <- integrate(ff1, lower = l, upper = r)$value
+  ff2 <- function(z) (z^2)*auxf(z, a = a, b = b, l = l, r = r)
+  v <- integrate(ff2, lower = l, upper = r)$value - m^2
+  list(m = m, s = sqrt(v))
+}
+
+get_hist_support <- function(ub, p){
+  # Lowest and highest bins used
+  supp <- which(p != 0) %>% range
+
+  if (supp[1] == 1){
+    # left support limit unknown
+    l <- NULL
+  } else {
+    # left support limit known
+    l <- ub[supp[1] - 1]
+  }
+  if (supp[2] == length(ub)){
+    # right support limit unknown
+    r <- NULL
+  } else {
+    # right support limit known
+    r <- ub[supp[2]]
+  }
+
+  list(l = l, r = r)
+
+}
+
+moments_mam <- function(mp, p){
+  m <- sum(p*mp)
+  s <- (sum(p*(mp^2)) - m^2) %>% sqrt
+  list(m = m, s = s)
+}
+
+mp <- function(ub, support_limit = 38){
+  cbind(c(-support_limit, ub[-length(ub)]),
+        c(ub[-length(ub)], support_limit)) %>%
+    rowMeans
+}
+
+
+triangle_get_b <- function(l, m, alpha){
+  m + (m-l)*(1-alpha+sqrt(2*(1-alpha)))/(1+alpha)
+}
+
+triangle_get_a <- function(r, m, alpha){
+  (m - (r-m)*(alpha + sqrt(2*alpha))/(2-alpha))
+}
+
+# Support limit follows Armantier et al (2017, Appendix C)
+fit_hist_triangle <- function(ub, p, support_limit = 38){
+  ub[ub == Inf] <- support_limit
+  sel <- which(p != 0)
+  psel <- p[sel]
+  n_bins <- sum(p != 0)
+  n_max <- length(p)
+  if(n_bins == 1){
+    if (sel > 1){
+      a <- ub[sel - 1]
+    } else {
+      a <- -support_limit
+    }
+    b <- ub[sel]
+  } else if (n_bins == 2){
+    if (psel[1] < .5){
+      b <- ub[sel[2]]
+      a <- triangle_get_a(b, ub[sel[1]], psel[1])
+    } else {
+      if (sel[1] == 1){
+        a <- -support_limit
+      } else {
+        a <- ub[sel[1]-1]
+      }
+      b <- triangle_get_b(a, ub[sel[1]], psel[1])
+    }
+  }
+  c <- mean(c(a, b))
+  parameters <- c(a, b, c)
+  CDF <- function(x){
+    ptri(x, a, b, c)
+  }
+  moments <- moments_tri(a, b, c)
+  list(parameters = parameters,
+       CDF = CDF,
+       support = c(a, b),
+       moments = moments)
+}
+
+#' Density and CDF of triangular distribution
+#'
+#' @param x evaluation point for density or CDF
+#' @param a,b,c parameters of distribution (left limit, center, right limit)
+#' @return \code{dtri} returns the density, \code{ptri} returns the CDF,
+#' \code{moments_tri} returns the mean and standard deviation
+#' @name triangular
+NULL
+
+#' @export
+#' @rdname triangular
+dtri <- function(x, a, b, c) {
+  out <- rep(0, length(x))
+  sel1 <- x >= a & x <= c
+  out[sel1] <- 2*(x[sel1]-a)/((b-a)*(c-a))
+  sel2 <- x > c & x <= b
+  out[sel2] <- 2*(b-x[sel2])/((b-a)*(b-c))
+  out
+}
+
+#' @export
+#' @rdname triangular
+ptri <- function(x, a, b, c) {
+  out <- rep(0, length(x))
+  sel1 <- x >= a & x <= c
+  out[sel1] <- ((x[sel1]-a)^2)/((b-a)*(c-a))
+  sel2 <- x > c & x <= b
+  out[sel2] <- 1 - ((b-x[sel2])^2)/((b-a)*(b-c))
+  out[x > b] <- 1
+  out
+}
+
+#' @export
+#' @rdname triangular
+moments_tri <- function(a, b, c){
+  m <- (a+b+c)/3
+  v <- (a^2+b^2+c^2 -a*b-a*c-b*c)/18
+  c(m, sqrt(v))
+}
+
+# Compute bounds on median, mean and mode, as implied by vector of probabilities p
+compute_bounds <- function(p, lb, ub){
+  # Median bound
+  ind1 <- min(which(cumsum(p) >= .5))
+  ind2 <- min(which(cumsum(p) > .5))
+  med_bound <- c(lb[ind1], ub[ind2])
+  # Mean bound
+  p_sel <- p > 0
+  mean_bound <- c(sum(p[p_sel]*lb[p_sel]), sum(p[p_sel]*ub[p_sel]))
+  # Mode bound
+  ind3 <- which.max(p)
+  mode_bound <- c(lb[min(ind3)], ub[max(ind3)])
+  # Return
+  list(median = med_bound, mean = mean_bound, mode = mode_bound)
+}
+
+# check whether point forecast m is within bounds implied by (p, lb, ub)
+within_bounds <- function(m, p, lb, ub){
+  bound_list <- compute_bounds(p, lb, ub)
+  sapply(bound_list, function(z) (m >= z[1] & m <= z[2])) %>% any
+}
+
+fit_moments <- function(ub, p, fit_support = TRUE){
+  bins_used <- sum(p > 0)
+  midp <- mp(ub)
+  if (bins_used == 1){
+    out <- c(midp[which(p > 0)], 1e-6)
+  } else if (bins_used == 2){
+    out <- moments_mam(midp, p) %>% unlist %>% unname
+  } else {
+    out <- fit_hist_gb(ub, p, fit_support = fit_support)$moments
+  }
+  out
+}
