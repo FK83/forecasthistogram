@@ -143,23 +143,26 @@ plot.forecasthistogram <- function(x, ylim = NULL, outer_width = 3, ...){
   if (!is.null(ylim)){
     g <- g + ylim(ylim)
   }
-  # Add curve
-  if (x$method == "gbeta"){
-    ff <- function(z){
-      ret <- auxf(z, a = x$parameters[1], b = x$parameters[2],
-                  l = x$parameters[3], r = x$parameters[4])
-      ret[is.na(ret)] <- 0
-      ret
+  # If quantification is available for x: Add curve to plot
+  if (!is.null(x$method)){
+    # Add curve
+    if (x$method == "gbeta"){
+      ff <- function(z){
+        ret <- auxf(z, a = x$parameters[1], b = x$parameters[2],
+                    l = x$parameters[3], r = x$parameters[4])
+        ret[is.na(ret)] <- 0
+        ret
+      }
+    } else {
+      ff <- function(z){
+        dtri(z, a = x$parameters[1], b = x$parameters[2],
+             c = x$parameters[3])
+      }
     }
-  } else {
-    ff <- function(z){
-      dtri(z, a = x$parameters[1], b = x$parameters[2],
-           c = x$parameters[3])
-    }
+    g <- g +
+      stat_function(fun = ff, n = 1000, geom = "line",
+                    size = I(1.4)) + ylab("")
   }
-  g <- g +
-    stat_function(fun = ff, n = 1000, geom = "line",
-                  size = I(1.4)) + ylab("")
   g
 }
 
@@ -194,6 +197,7 @@ is_adjacent <- function(p){
 
 #' Fit parametric distribution to histogram probabilities
 #'
+#' @export
 #' @param ub vector of upper bounds of histogram bins
 #' @param p vector of probabilities (positive, summing to one)
 #' @param fit_support whether to choose support according to statistical criterium (default is \code{TRUE})
@@ -251,9 +255,6 @@ mean.forecasthistogram <- function(x, ...){
 }
 
 fit_hist_gb <- function(ub, p, fit_support = TRUE, support_limit = 38){
-  # checks
-  check_ub(ub)
-  check_p(p)
   # largest finite value in ub
   largest_finite <- max(ub[ub < Inf])
   # Get support of histogram
@@ -571,4 +572,14 @@ fit_moments <- function(ub, p, fit_support = TRUE){
     out <- fit_hist_gb(ub, p, fit_support = fit_support)$moments
   }
   out
+}
+
+#' Constructor function for forecasthistogram object
+#'
+#' @export
+#' @param ub vector of upper bounds
+#' @param p vector of probabilities
+forecasthistogram <- function(ub, p){
+  x <- list(ub = ub, p = p)
+  structure(x, class = "forecasthistogram")
 }
