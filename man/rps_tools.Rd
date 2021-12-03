@@ -2,16 +2,26 @@
 % Please edit documentation in R/sce_tools.R
 \name{rps_tools}
 \alias{rps_tools}
-\alias{erps}
 \alias{rps}
+\alias{erps}
+\alias{erps.numeric}
+\alias{erps.forecasthistogram}
+\alias{rps.numeric}
+\alias{rps.forecasthistogram}
 \title{Functions for the (Expected) Ranked Probability Score}
 \usage{
-erps(p)
+\method{erps}{numeric}(p)
 
-rps(p, kstar)
+\method{erps}{forecasthistogram}(x)
+
+\method{rps}{numeric}(p, kstar)
+
+\method{rps}{forecasthistogram}(x, kstar)
 }
 \arguments{
 \item{p}{Vector of probabilities (must be positive and sum to one)}
+
+\item{x}{object of class `forecasthistogram'}
 
 \item{kstar, }{realizing category (integer, min = 1, max = length(p))}
 }

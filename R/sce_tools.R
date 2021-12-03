@@ -10,42 +10,9 @@ transform_p <- function(x){
   (out/100)
 }
 
-# function to check vector of probabilities
-check_p <- function(p, SCE = FALSE){
-  if (!is.vector(p)){
-    stop("p must be a vector")
-  }
-  if (any(is.na(p))){
-    stop("NAs in p cannot be handled")
-  }
-  if (any(p < 0) | any(p > 1)){
-    stop("p contains values outside [0,1] interval")
-  }
-  if (abs(sum(p)-1) > 1e-10){
-    stop("Values in p do not sum to one")
-  }
-  if (SCE){
-    if (length(p) != 10){
-      stop("p must contain 10 elements, in line with SCE question format")
-    }
-  }
-}
-
-# function to check vector of upper bounds
-check_ub <- function(ub, SCE = FALSE){
-  if (SCE){
-    ub_sce <- c(-12, -8, -4, -2, 0, 2, 4, 8, 12, Inf)
-    if (any(ub != ub_sce)){
-      stop("Upper bounds do not conform to SCE format")
-    }
-  }
-  if (any(diff(ub) <= 0)){
-    stop("Upper bounds must be strictly increasing")
-  }
-}
-
 #' Functions for the (Expected) Ranked Probability Score
 #'
+#' @param x object of class `forecasthistogram'
 #' @param p Vector of probabilities (must be positive and sum to one)
 #' @param kstar, realizing category (integer, min = 1, max = length(p))
 #' @return \code{erps} returns the Expected Ranked Probability Score (ERPS), a single number (vector of length one).
@@ -59,14 +26,25 @@ check_ub <- function(ub, SCE = FALSE){
 #' Krüger, F., and L. Pavlova (2020): `Quantifying Subjective
 #' Uncertainty in Survey Expectations'. Working Paper, \doi{10.18452/21401}.
 #' @name rps_tools
+#' @aliases rps
+#' @aliases erps
 NULL
+
+erps <- function(x){
+  UseMethod("erps")
+}
 
 #' @rdname rps_tools
 #' @export
-erps <- function(p){
+erps.numeric <- function(p){
   check_p(p)
   P <- cumsum(p)
   sum(P*(1-P))
+}
+#' @export
+#' @rdname rps_tools
+erps.forecasthistogram <- function(x){
+  erps.numeric(x$p)
 }
 
 #' Helper function to convert numerical realization into bin indicator
@@ -79,9 +57,13 @@ num_to_bin <- function(y, ub){
   min(which(y <= ub))
 }
 
+rps <- function(x, kstar){
+  UseMethod("rps")
+}
+
 #' @export
 #' @rdname rps_tools
-rps <- function(p, kstar){
+rps.numeric <- function(p, kstar){
   P <- cumsum(p)
   K <- length(p)
   if (kstar == 1){
@@ -89,6 +71,12 @@ rps <- function(p, kstar){
   } else {
     ( sum(P[1:(kstar-1)]^2) + sum((1-P[kstar:K])^2) )
   }
+}
+
+#' @export
+#' @rdname rps_tools
+rps.forecasthistogram <- function(x, kstar){
+  rps.numeric(x$p, kstar)
 }
 
 # Fast version of rps (here p is a matrix of probability forecasts)
@@ -114,9 +102,6 @@ rps_mat <- function(p, kstar){
 plot.forecasthistogram <- function(x, ylim = NULL, outer_width = 3, ...){
   ub <- x$ub
   p <- x$p
-  # checks
-  check_ub(ub)
-  check_p(p)
   # length of p vector
   lp <- length(p)
   # replace rightmost limit if it is infinite
@@ -195,11 +180,16 @@ is_adjacent <- function(p){
   out
 }
 
+quantify <- function(x){
+  UseMethod("quantify")
+}
+
 #' Fit parametric distribution to histogram probabilities
 #'
 #' @export
-#' @param ub vector of upper bounds of histogram bins
-#' @param p vector of probabilities (positive, summing to one)
+#' @param x object of class `forecasthistogram'
+#' @param ub vector of upper bounds
+#' @param p vector of probabilities
 #' @param fit_support whether to choose support according to statistical criterium (default is \code{TRUE})
 #' @param support_limit defaults to 38 (relevant only if \code{fit_support == FALSE})
 #' @return object of class `forecasthistogram'. Use function \code{quantile.forecasthistogram} to compute quantiles, \code{plot.forecasthistogram} for plotting,
@@ -215,7 +205,11 @@ is_adjacent <- function(p){
 #'
 #' Krüger, F., and L. Pavlova (2020): `Quantifying Subjective
 #' Uncertainty in Survey Expectations'. Working Paper, \doi{10.18452/21401}.
-fit_hist_emw <- function(ub, p, fit_support = TRUE, support_limit = 38){
+#' @name quantify
+
+#' @export
+#' @rdname quantify
+quantify.numeric <- function(ub, p, fit_support = TRUE, support_limit = 38){
   nr_bins <- sum(p != 0)
   if (nr_bins < 3){
     if (!is_adjacent(p)){
@@ -234,12 +228,24 @@ fit_hist_emw <- function(ub, p, fit_support = TRUE, support_limit = 38){
   structure(aux, class = "forecasthistogram")
 }
 
+#' @export
+#' @param x object of class `forecasthistogram'
+#' @rdname quantify
+quantify.forecasthistogram <- function(x, fit_support = TRUE, support_limit = 38){
+  quantify.numeric(x$ub, x$p, fit_support, support_limit)
+}
+
 #' Compute quantiles of fitted histogram
 #' @export
 #' @param x object of class \code{forecasthistogram}
 #' @param probs quantile levels
 #' @param ... additional parameters, currently not in use
 quantile.forecasthistogram <- function(x, probs = (1:9)/10, ...){
+  # if x has not been quantified yet
+  if (is.null(x$method)){
+    x <- quantify.forecasthistogram(x)
+    message("Histogram quantified for quantile computation")
+  }
   tmp <- get_q(cdf = x$CDF, lims = x$support,
                quantile_levels = probs)
   names(tmp) <- paste0(probs*100, "%")
@@ -251,6 +257,11 @@ quantile.forecasthistogram <- function(x, probs = (1:9)/10, ...){
 #' @param x object of class \code{forecasthistogram}
 #' @param ... additional parameters, currently not in use
 mean.forecasthistogram <- function(x, ...){
+  # if x has not been quantified yet
+  if (is.null(x$method)){
+    x <- quantify.forecasthistogram(x)
+    message("Histogram quantified for mean computation")
+  }
   x$moments[1]
 }
 
@@ -574,12 +585,105 @@ fit_moments <- function(ub, p, fit_support = TRUE){
   out
 }
 
+# function to check vector of probabilities
+check_p <- function(p, SCE = FALSE){
+  if (!is.vector(p)){
+    stop("p must be a vector")
+  }
+  if (any(is.na(p))){
+    stop("NAs in p cannot be handled")
+  }
+  if (any(p < 0) | any(p > 1)){
+    stop("p contains values outside [0,1] interval")
+  }
+  if (abs(sum(p)-1) > 1e-10){
+    stop("Values in p do not sum to one")
+  }
+  if (SCE){
+    if (length(p) != 10){
+      stop("p must contain 10 elements, in line with SCE question format")
+    }
+  }
+}
+
+# function to check vector of upper bounds
+check_ub <- function(ub, SCE = FALSE){
+  if (SCE){
+    ub_sce <- c(-12, -8, -4, -2, 0, 2, 4, 8, 12, Inf)
+    if (any(ub != ub_sce)){
+      stop("Upper bounds do not conform to SCE format")
+    }
+  }
+  if (any(diff(ub) <= 0)){
+    stop("Upper bounds must be strictly increasing")
+  }
+}
+
 #' Constructor function for forecasthistogram object
 #'
 #' @export
 #' @param ub vector of upper bounds
 #' @param p vector of probabilities
 forecasthistogram <- function(ub, p){
+  validate_forecasthistogram(new_forecasthistogram(ub, p))
+}
+
+new_forecasthistogram <- function(ub, p){
   x <- list(ub = ub, p = p)
   structure(x, class = "forecasthistogram")
+}
+
+validate_forecasthistogram <- function(x){
+  # check vector of upper bounds
+  check_ub(x$ub)
+  # check vector of probabilities
+  check_p(x$p)
+  # return x
+  x
+}
+
+#' Draw example histogram
+#'
+#' @param style Either "Gaussian" or "Random". "Gaussian" means that histogram has (approximate) bell shape.
+#' @param n_bins Number of bins that receive strictly positive probability. Defaults to \code{NULL} (random number of bins). Relevant only if \code{style == "Random"}.
+#' @param enforce_adjacent Whether to enforce adjacency of bins (defaults to \code{TRUE}). Relevant only if \code{style == "Random"}.
+#' @details Bin definitions of random histogram are as in the Survey of Consumer Forecasts data set.
+#' @examples
+#' # Draw random histogram
+#' x <- forecasthistogram_example()
+#' # Plot it
+#' plot(x)
+#' @export
+forecasthistogram_example <- function(style = "Gaussian",
+                                      n_bins = NULL,
+                                      enforce_adjacent = TRUE){
+  match.arg(style, c("Gaussian", "Random"))
+  # Use SCE bin definitions (upper bounds)
+  ub <- c(-12, -8, -4, -2, 0, 2, 4, 8, 12, Inf)
+  n_total <- length(ub)
+  if (style == "Gaussian"){
+    ub2 <- ub[is.finite(ub)]
+    n_total2 <- n_total - sum(is.infinite(ub))
+    P <- pnorm(ub, mean = round(ub2[sample.int(n_total2, size = 1)]),
+               sd = rexp(1, rate = 1))
+    p <- c(P[1], diff(P))
+  } else {
+    # Determine number of bins with positive probability
+    if (is.null(n_bins)){
+      n_bins <- sample.int(n_total, size = 1)
+    }
+    # Choose positive bins
+    pos_bins <- sample(all_bins, size = n_bins, replace = FALSE) %>%
+      sort
+    if (enforce_adjacent){
+      pos_bins <- pos_bins[1]:(pos_bins[1] + n_bins - 1)
+    }
+    # Draw probabilities
+    p_aux <- rexp(n_bins) %>% (function(z) z/sum(z))
+    p <- rep(0, n_total)
+    p[pos_bins] <- p_aux
+  }
+
+  # Return forecasthistogram object
+  forecasthistogram(ub, p)
 }
