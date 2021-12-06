@@ -526,28 +526,45 @@ fit_hist_triangle2 <- function(ub, p, support_limit = 38){
     }
     b <- ub[sel]
   } else if (n_bins == 2){
-    # two-bin case: optimize over support limits
-    # function for optimization
-    ff <- function(theta, ub, p){
-      a <- theta[1]
-      b <- theta[1] + (theta[2]^2)
-      c <- mean(c(a, b))
-      d <- ptri(ub, a, b, c) - cumsum(p)
-      sum(d^2)
-    }
-    # find starting values
-    if (sel[1] == 1){
-      par1 <- -support_limit
+    # two-bin case, adjacent bins: need to fix one limit
+    # (otherwise solution is not unique)
+    if (is_adjacent(p)){
+      # find nonzero bins
+      which_nz <- which(p != 0)
+      # find width of bins !!! Assume that left endpoint of first interval
+      # is at -Inf
+      bin_width <- ub - c(-Inf, head(ub, -1))
+      # fix endpoint of bin with higher density
+      bin_dens <- (p/bin_width)
+      if (which.max(bin_dens) == which_nz[1]){
+        # fix left endpoint
+        a <- ub[which_nz[1]-1]
+        # find right endpoint
+        b <- optimize(f = ff_b, interval = c(a, 1e4),
+                      ub = ub, p = p, a = a)$minimum
+      } else if (which.max(bin_dens) == which_nz[2]){
+        # fix right endpoint
+        b <- ub[which_nz[2]]
+        # find left endpoint
+        a <- optimize(f = ff_a, interval = c(-1e4, b),
+                      ub = ub, p = p, b = b)$minimum
+      }
     } else {
-      par1 <- ub[sel[1]-1]
+      # two-bin case, non-adjacent bins: optimize both endpoints
+      # find starting values
+      if (sel[1] == 1){
+        par1 <- -support_limit
+      } else {
+        par1 <- ub[sel[1]-1]
+      }
+      par2 <- sqrt(ub[sel[2]-1]-par1)
+      # run optimizer
+      opt <- optim(par = c(par1, par2), fn = ff_ab,
+                   ub = ub, p = p)
+      stopifnot(opt$converence == 0)
+      a <- opt$par[1]
+      b <- a + opt$par[2]^2
     }
-    par2 <- sqrt(ub[sel[2]-1]-par1)
-    # run optimizer
-    opt <- optim(par = c(par1, par2), fn = ff,
-                 ub = ub, p = p)
-    stopifnot(opt$converence == 0)
-    a <- opt$par[1]
-    b <- a + opt$par[2]^2
   }
   # c fixed (isosceles triangle)
   c <- mean(c(a, b))
@@ -561,6 +578,34 @@ fit_hist_triangle2 <- function(ub, p, support_limit = 38){
        CDF = CDF,
        support = c(a, b),
        moments = moments)
+}
+
+# function for optimization of triangular distribution
+# case of two parameters (left and right endpoint)
+ff_ab <- function(theta, ub, p){
+  a <- theta[1]
+  b <- theta[1] + (theta[2]^2)
+  c <- mean(c(a, b))
+  d <- ptri(ub, a, b, c) - cumsum(p)
+  sum(d^2)
+}
+
+# function for optimization of triangular distribution
+# case of one parameter (left endpoint a, right one is fixed at b)
+ff_a <- function(theta, ub, p, b){
+  a <- theta
+  c <- mean(c(a, b))
+  d <- ptri(ub, a, b, c) - cumsum(p)
+  sum(d^2)
+}
+
+# function for optimization of triangular distribution
+# case of one parameter (right endpoint b, left one is fixed at a)
+ff_b <- function(theta, ub, p, a){
+  b <- theta
+  c <- mean(c(a, b))
+  d <- ptri(ub, a, b, c) - cumsum(p)
+  sum(d^2)
 }
 
 #' Density and CDF of triangular distribution
