@@ -212,10 +212,10 @@ quantify <- function(x){
 quantify.numeric <- function(ub, p, fit_support = TRUE, support_limit = 38){
   nr_bins <- sum(p != 0)
   if (nr_bins < 3){
-    if (!is_adjacent(p)){
-      stop("In the two-bin case, EWM procedure requires adjacent bins")
-    }
-    aux <- fit_hist_triangle(ub, p)
+    #if (!is_adjacent(p)){
+      #stop("In the two-bin case, EWM procedure requires adjacent bins")
+    #}
+    aux <- fit_hist_triangle2(ub, p)
     mth <- "triangle"
   } else {
     aux <- fit_hist_gb(ub, p, fit_support, support_limit)
@@ -510,6 +510,59 @@ fit_hist_triangle <- function(ub, p, support_limit = 38){
        moments = moments)
 }
 
+# Alternative procedure for triangle fitting (based on optimization)
+fit_hist_triangle2 <- function(ub, p, support_limit = 38){
+  ub[ub == Inf] <- support_limit
+  sel <- which(p != 0)
+  psel <- p[sel]
+  n_bins <- sum(p != 0)
+  n_max <- length(p)
+  # single-bin case: need to fix support limit
+  if (n_bins == 1){
+    if (sel > 1){
+      a <- ub[sel - 1]
+    } else {
+      a <- -support_limit
+    }
+    b <- ub[sel]
+  } else if (n_bins == 2){
+    # two-bin case: optimize over support limits
+    # function for optimization
+    ff <- function(theta, ub, p){
+      a <- theta[1]
+      b <- theta[1] + (theta[2]^2)
+      c <- mean(c(a, b))
+      d <- ptri(ub, a, b, c) - cumsum(p)
+      sum(d^2)
+    }
+    # find starting values
+    if (sel[1] == 1){
+      par1 <- -support_limit
+    } else {
+      par1 <- ub[sel[1]-1]
+    }
+    par2 <- sqrt(ub[sel[2]-1]-par1)
+    # run optimizer
+    opt <- optim(par = c(par1, par2), fn = ff,
+                 ub = ub, p = p)
+    stopifnot(opt$converence == 0)
+    a <- opt$par[1]
+    b <- a + opt$par[2]^2
+  }
+  # c fixed (isosceles triangle)
+  c <- mean(c(a, b))
+  # summary information on fit
+  parameters <- c(a, b, c)
+  CDF <- function(x){
+    ptri(x, a, b, c)
+  }
+  moments <- moments_tri(a, b, c)
+  list(parameters = parameters,
+       CDF = CDF,
+       support = c(a, b),
+       moments = moments)
+}
+
 #' Density and CDF of triangular distribution
 #'
 #' @param x evaluation point for density or CDF
@@ -673,7 +726,7 @@ forecasthistogram_example <- function(style = "Gaussian",
       n_bins <- sample.int(n_total, size = 1)
     }
     # Choose positive bins
-    pos_bins <- sample(all_bins, size = n_bins, replace = FALSE) %>%
+    pos_bins <- sample.int(n_total, size = n_bins, replace = FALSE) %>%
       sort
     if (enforce_adjacent){
       pos_bins <- pos_bins[1]:(pos_bins[1] + n_bins - 1)
@@ -686,4 +739,18 @@ forecasthistogram_example <- function(style = "Gaussian",
 
   # Return forecasthistogram object
   forecasthistogram(ub, p)
+}
+
+compare_fit <- function(ub, p, F, plot = FALSE){
+  P <- cumsum(p)
+  Fmatch <- F(ub)
+  if (plot){
+    matplot(ub, cbind(P, Fmatch), type = "n", bty = "n",
+            ylab = "Cumulative probability")
+    points(ub, P)
+    lines(ub, Fmatch)
+  }
+  comp <- cbind(ub, P, Fmatch)
+  objective <- sum((comp[,3]-comp[,2])^2)
+  list(comp = comp, objective = objective)
 }
