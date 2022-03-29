@@ -536,13 +536,18 @@ fit_hist_triangle2 <- function(ub, p, support_limit = 38){
       bin_width <- ub - c(-Inf, head(ub, -1))
       # fix endpoint of bin with higher density
       bin_dens <- (p/bin_width)
-      if (which.max(bin_dens) == which_nz[1]){
+      # find bin with highest density
+      which_max <- which.max(bin_dens)
+      if (sum(bin_dens == max(bin_dens)) == 2){
+        warning("Highest-density bin not unique. Arbitrarily chose leftmost bin")
+      }
+      if (which_max == which_nz[1]){
         # fix left endpoint
         a <- ub[which_nz[1]-1]
         # find right endpoint
         b <- optimize(f = ff_b, interval = c(a, 1e4),
                       ub = ub, p = p, a = a)$minimum
-      } else if (which.max(bin_dens) == which_nz[2]){
+      } else if (which_max == which_nz[2]){
         # fix right endpoint
         b <- ub[which_nz[2]]
         # find left endpoint
