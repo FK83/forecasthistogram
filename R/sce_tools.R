@@ -15,8 +15,7 @@ transform_p <- function(x){
 #' @param x object of class `forecasthistogram'
 #' @param p Vector of probabilities (must be positive and sum to one)
 #' @param kstar, realizing category (integer, min = 1, max = length(p))
-#' @return \code{erps} returns the Expected Ranked Probability Score (ERPS), a single number (vector of length one).
-#' \code{rps} returns the Ranked Probability Score (RPS).
+#' @return \code{erps} returns the Expected Ranked Probability Score (ERPS). \code{rps} returns the Ranked Probability Score (RPS). \code{ebs} returns the expected Brier score (EBS).
 #' @details Krüger and Pavlova (2020) propose to use the ERPS as a robust measure
 #' of the uncertainty in a survey histogram. The RPS is due to Epstein (1969).
 #' See also Section 4.2 in Krüger and Pavlova (2020).
@@ -33,6 +32,9 @@ NULL
 erps <- function(x){
   UseMethod("erps")
 }
+ebs <- function(x){
+  UseMethod("ebs")
+}
 
 #' @rdname rps_tools
 #' @export
@@ -46,6 +48,21 @@ erps.numeric <- function(p){
 erps.forecasthistogram <- function(x){
   erps.numeric(x$p)
 }
+
+#' @rdname rps_tools
+#' @export
+ebs.numeric <- function(p){
+  check_p(p)
+  sum(p*(1-p))
+}
+#' @export
+#' @rdname rps_tools
+ebs.forecasthistogram <- function(x){
+  ebs.numeric(x$p)
+}
+
+
+
 
 #' Helper function to convert numerical realization into bin indicator
 #'
@@ -246,7 +263,9 @@ quantile.forecasthistogram <- function(x, probs = (1:9)/10, ...){
     x <- quantify.forecasthistogram(x)
     message("Histogram quantified for quantile computation")
   }
-  tmp <- get_q(cdf = x$CDF, lims = x$support,
+  # choose limits (support of x, capped at -30 and 30)
+  q_lims <- x$support
+  tmp <- get_q(cdf = x$CDF, lims = q_lims,
                quantile_levels = probs)
   names(tmp) <- paste0(probs*100, "%")
   tmp
@@ -263,6 +282,19 @@ mean.forecasthistogram <- function(x, ...){
     message("Histogram quantified for mean computation")
   }
   x$moments[1]
+}
+
+#' Compute variance of fitted histogram
+#' @export
+#' @param x object of class \code{forecasthistogram}
+#' @param ... additional parameters, currently not in use
+var.forecasthistogram <- function(x, ...){
+  # if x has not been quantified yet
+  if (is.null(x$method)){
+    x <- quantify.forecasthistogram(x)
+    message("Histogram quantified for mean computation")
+  }
+  (x$moments[2]^2)
 }
 
 fit_hist_gb <- function(ub, p, fit_support = TRUE, support_limit = 38){

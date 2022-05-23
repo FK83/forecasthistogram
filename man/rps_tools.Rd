@@ -6,6 +6,8 @@
 \alias{erps}
 \alias{erps.numeric}
 \alias{erps.forecasthistogram}
+\alias{ebs.numeric}
+\alias{ebs.forecasthistogram}
 \alias{rps.numeric}
 \alias{rps.forecasthistogram}
 \title{Functions for the (Expected) Ranked Probability Score}
@@ -13,6 +15,10 @@
 \method{erps}{numeric}(p)
 
 \method{erps}{forecasthistogram}(x)
+
+\method{ebs}{numeric}(p)
+
+\method{ebs}{forecasthistogram}(x)
 
 \method{rps}{numeric}(p, kstar)
 
@@ -26,8 +32,7 @@
 \item{kstar, }{realizing category (integer, min = 1, max = length(p))}
 }
 \value{
-\code{erps} returns the Expected Ranked Probability Score (ERPS), a single number (vector of length one).
-\code{rps} returns the Ranked Probability Score (RPS).
+\code{erps} returns the Expected Ranked Probability Score (ERPS). \code{rps} returns the Ranked Probability Score (RPS). \code{ebs} returns the expected Brier score (EBS).
 }
 \description{
 Functions for the (Expected) Ranked Probability Score
