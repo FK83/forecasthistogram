@@ -29,9 +29,11 @@ transform_p <- function(x){
 #' @aliases erps
 NULL
 
+#' @export
 erps <- function(x){
   UseMethod("erps")
 }
+#' @export
 ebs <- function(x){
   UseMethod("ebs")
 }
@@ -74,6 +76,7 @@ num_to_bin <- function(y, ub){
   min(which(y <= ub))
 }
 
+#' @export
 rps <- function(x, kstar){
   UseMethod("rps")
 }
@@ -197,6 +200,7 @@ is_adjacent <- function(p){
   out
 }
 
+#' @export
 quantify <- function(x){
   UseMethod("quantify")
 }
