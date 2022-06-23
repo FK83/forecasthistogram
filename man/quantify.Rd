@@ -6,20 +6,20 @@
 \alias{quantify.forecasthistogram}
 \title{Fit parametric distribution to histogram probabilities}
 \usage{
-\method{quantify}{numeric}(ub, p, fit_support = TRUE, support_limit = 38)
+\method{quantify}{numeric}(x, ub, fit_support = TRUE, support_limit = 38, ...)
 
-\method{quantify}{forecasthistogram}(x, fit_support = TRUE, support_limit = 38)
+\method{quantify}{forecasthistogram}(x, fit_support = TRUE, support_limit = 38, ...)
 }
 \arguments{
-\item{ub}{vector of upper bounds}
+\item{x}{object of class `forecasthistogram'}
 
-\item{p}{vector of probabilities}
+\item{ub}{vector of upper bounds}
 
 \item{fit_support}{whether to choose support according to statistical criterium (default is \code{TRUE})}
 
 \item{support_limit}{defaults to 38 (relevant only if \code{fit_support == FALSE})}
 
-\item{x}{object of class `forecasthistogram'}
+\item{...}{other inputs (currently not in use)}
 }
 \value{
 object of class `forecasthistogram'. Use function \code{quantile.forecasthistogram} to compute quantiles, \code{plot.forecasthistogram} for plotting,

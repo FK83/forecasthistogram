@@ -4,12 +4,12 @@
 \alias{forecasthistogram}
 \title{Constructor function for forecasthistogram object}
 \usage{
-forecasthistogram(ub, p)
+forecasthistogram(p, ub)
 }
 \arguments{
-\item{ub}{vector of upper bounds}
-
 \item{p}{vector of probabilities}
+
+\item{ub}{vector of upper bounds}
 }
 \description{
 Constructor function for forecasthistogram object

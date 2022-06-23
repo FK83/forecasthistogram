@@ -1,8 +1,10 @@
 #' @importFrom magrittr %>%
 #' @importFrom dplyr if_else
-#' @importFrom stats quantile integrate optim optimize
+#' @importFrom stats quantile integrate optim optimize pnorm rexp uniroot
+#' @importFrom graphics lines matplot points
+#' @importFrom utils head
 
-# handles NAs and transforms non-NAs to [0,1] interva
+# handles NAs and transforms non-NAs to [0,1] interval
 # (used for raw SCE data)
 transform_p <- function(x){
   out <- x
@@ -12,8 +14,7 @@ transform_p <- function(x){
 
 #' Functions for the (Expected) Ranked Probability Score
 #'
-#' @param x object of class `forecasthistogram'
-#' @param p Vector of probabilities (must be positive and sum to one)
+#' @param x object of class `forecasthistogram', or vector of probabilities (must be positive and sum to one)
 #' @param kstar, realizing category (integer, min = 1, max = length(p))
 #' @return \code{erps} returns the Expected Ranked Probability Score (ERPS). \code{rps} returns the Ranked Probability Score (RPS). \code{ebs} returns the expected Brier score (EBS).
 #' @details Krüger and Pavlova (2020) propose to use the ERPS as a robust measure
@@ -27,6 +28,7 @@ transform_p <- function(x){
 #' @name rps_tools
 #' @aliases rps
 #' @aliases erps
+#' @aliases ebs
 NULL
 
 #' @export
@@ -40,9 +42,9 @@ ebs <- function(x){
 
 #' @rdname rps_tools
 #' @export
-erps.numeric <- function(p){
-  check_p(p)
-  P <- cumsum(p)
+erps.numeric <- function(x){
+  check_p(x)
+  P <- cumsum(x)
   sum(P*(1-P))
 }
 #' @export
@@ -53,9 +55,9 @@ erps.forecasthistogram <- function(x){
 
 #' @rdname rps_tools
 #' @export
-ebs.numeric <- function(p){
-  check_p(p)
-  sum(p*(1-p))
+ebs.numeric <- function(x){
+  check_p(x)
+  sum(x*(1-x))
 }
 #' @export
 #' @rdname rps_tools
@@ -83,9 +85,9 @@ rps <- function(x, kstar){
 
 #' @export
 #' @rdname rps_tools
-rps.numeric <- function(p, kstar){
-  P <- cumsum(p)
-  K <- length(p)
+rps.numeric <- function(x, kstar){
+  P <- cumsum(x)
+  K <- length(x)
   if (kstar == 1){
     sum((1-P)^2)
   } else {
@@ -173,10 +175,10 @@ plot.forecasthistogram <- function(x, ylim = NULL, outer_width = 3, ...){
 
 # Function to numerically recover quantile from CDF function
 q_from_cdf <- function(cdf, alpha, lims){
-  d_f <- function(x){
+  auxf <- function(x){
     (cdf(x)-alpha)^2
   }
-  out_tmp <- optimize(d_f, interval = lims)
+  out_tmp <- optimize(auxf, interval = lims)
   if (out_tmp$objective > 1e-6){
     stop("Failed to find quantile")
   } else {
@@ -201,18 +203,18 @@ is_adjacent <- function(p){
 }
 
 #' @export
-quantify <- function(x){
+quantify <- function(x, ...){
   UseMethod("quantify")
 }
 
 #' Fit parametric distribution to histogram probabilities
 #'
 #' @export
-#' @param x object of class `forecasthistogram'
+#' @param x object of class `forecasthistogram', or vector of probabilities (must be positive and sum to one)
 #' @param ub vector of upper bounds
-#' @param p vector of probabilities
 #' @param fit_support whether to choose support according to statistical criterium (default is \code{TRUE})
 #' @param support_limit defaults to 38 (relevant only if \code{fit_support == FALSE})
+#' @param ... other inputs (currently not in use)
 #' @return object of class `forecasthistogram'. Use function \code{quantile.forecasthistogram} to compute quantiles, \code{plot.forecasthistogram} for plotting,
 #' \code{mean.forecasthistogram} and \code{var.forecasthistogram} for computing implied mean and variance.
 #' @details The function fits a parametric distribution based on the histogram probabilities in \code{p}. The fitting procedure has been proposed by
@@ -230,21 +232,21 @@ quantify <- function(x){
 
 #' @export
 #' @rdname quantify
-quantify.numeric <- function(ub, p, fit_support = TRUE, support_limit = 38){
-  nr_bins <- sum(p != 0)
+quantify.numeric <- function(x, ub, fit_support = TRUE, support_limit = 38, ...){
+  nr_bins <- sum(x != 0)
   if (nr_bins < 3){
     #if (!is_adjacent(p)){
       #stop("In the two-bin case, EWM procedure requires adjacent bins")
     #}
-    aux <- fit_hist_triangle2(ub, p)
+    aux <- fit_hist_triangle2(ub = ub, p = x)
     mth <- "triangle"
   } else {
-    aux <- fit_hist_gb(ub, p, fit_support, support_limit)
+    aux <- fit_hist_gb(ub = ub, p = x, fit_support, support_limit)
     mth <- "gbeta"
   }
   aux$method <- mth
   aux$ub <- ub
-  aux$p <- p
+  aux$p <- x
   aux$fit_support <- fit_support
   structure(aux, class = "forecasthistogram")
 }
@@ -252,8 +254,8 @@ quantify.numeric <- function(ub, p, fit_support = TRUE, support_limit = 38){
 #' @export
 #' @param x object of class `forecasthistogram'
 #' @rdname quantify
-quantify.forecasthistogram <- function(x, fit_support = TRUE, support_limit = 38){
-  quantify.numeric(x$ub, x$p, fit_support, support_limit)
+quantify.forecasthistogram <- function(x, fit_support = TRUE, support_limit = 38, ...){
+  quantify.numeric(x = x$p, ub = x$ub, fit_support, support_limit)
 }
 
 #' Compute quantiles of fitted histogram
@@ -267,8 +269,18 @@ quantile.forecasthistogram <- function(x, probs = (1:9)/10, ...){
     x <- quantify.forecasthistogram(x)
     message("Histogram quantified for quantile computation")
   }
-  # choose limits (support of x, capped at -30 and 30)
-  q_lims <- x$support
+  # choose limits
+  # try "narrow" limits
+  q_lim1 <- max(c(x$support[1], x$moments[1]-5*x$moments[2]))
+  q_lim2 <- min(c(x$support[2], x$moments[1]+5*x$moments[2]))
+  check1 <- x$CDF(q_lim1) < min(probs)
+  check2 <- x$CDF(q_lim2) > max(probs)
+  # use "narrow" limits if wide enough, else use full support
+  if (check1 & check2){
+    q_lims = c(q_lim1, q_lim2)
+  } else {
+    q_lims = x$support
+  }
   tmp <- get_q(cdf = x$CDF, lims = q_lims,
                quantile_levels = probs)
   names(tmp) <- paste0(probs*100, "%")
@@ -719,7 +731,7 @@ fit_moments <- function(ub, p, fit_support = TRUE){
   } else if (bins_used == 2){
     out <- moments_mam(midp, p) %>% unlist %>% unname
   } else {
-    out <- fit_hist_gb(ub, p, fit_support = fit_support)$moments
+    out <- fit_hist_gb(ub = ub, p = p, fit_support = fit_support)$moments
   }
   out
 }
@@ -761,13 +773,13 @@ check_ub <- function(ub, SCE = FALSE){
 #' Constructor function for forecasthistogram object
 #'
 #' @export
-#' @param ub vector of upper bounds
 #' @param p vector of probabilities
-forecasthistogram <- function(ub, p){
-  validate_forecasthistogram(new_forecasthistogram(ub, p))
+#' @param ub vector of upper bounds
+forecasthistogram <- function(p, ub){
+  validate_forecasthistogram(new_forecasthistogram(p, ub))
 }
 
-new_forecasthistogram <- function(ub, p){
+new_forecasthistogram <- function(p, ub){
   x <- list(ub = ub, p = p)
   structure(x, class = "forecasthistogram")
 }
@@ -824,7 +836,7 @@ forecasthistogram_example <- function(style = "Gaussian",
   }
 
   # Return forecasthistogram object
-  forecasthistogram(ub, p)
+  forecasthistogram(p = p, ub = ub)
 }
 
 compare_fit <- function(ub, p, F, plot = FALSE){

@@ -4,6 +4,7 @@
 \alias{rps_tools}
 \alias{rps}
 \alias{erps}
+\alias{ebs}
 \alias{erps.numeric}
 \alias{erps.forecasthistogram}
 \alias{ebs.numeric}
@@ -12,22 +13,20 @@
 \alias{rps.forecasthistogram}
 \title{Functions for the (Expected) Ranked Probability Score}
 \usage{
-\method{erps}{numeric}(p)
+\method{erps}{numeric}(x)
 
 \method{erps}{forecasthistogram}(x)
 
-\method{ebs}{numeric}(p)
+\method{ebs}{numeric}(x)
 
 \method{ebs}{forecasthistogram}(x)
 
-\method{rps}{numeric}(p, kstar)
+\method{rps}{numeric}(x, kstar)
 
 \method{rps}{forecasthistogram}(x, kstar)
 }
 \arguments{
-\item{p}{Vector of probabilities (must be positive and sum to one)}
-
-\item{x}{object of class `forecasthistogram'}
+\item{x}{object of class `forecasthistogram', or vector of probabilities (must be positive and sum to one)}
 
 \item{kstar, }{realizing category (integer, min = 1, max = length(p))}
 }
