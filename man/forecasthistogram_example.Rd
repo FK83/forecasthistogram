@@ -21,7 +21,7 @@ forecasthistogram_example(
 Draw example histogram
 }
 \details{
-Bin definitions of random histogram are as in the Survey of Consumer Forecasts data set.
+Bin definitions of random histogram are as in the Survey of Consumer Expectations data set.
 }
 \examples{
 # Draw random histogram

@@ -4,11 +4,12 @@ forecasthistogram
 ## About
 
 The forecasthistogram package contains functions to handle and study
-subjective probabilities ( ‘forecast histograms’) collected in several
+subjective probabilities (‘forecast histograms’) as collected in several
 economic surveys. The package accompanies the paper ‘Quantifying
 subjective uncertainty in survey expectations’ by Fabian Krüger and Lora
-Pavlova (2022), available at
-<https://econpapers.wiwi.kit.edu/downloads/KITe_WP_139.pdf>.
+Pavlova, available at
+<https://econpapers.wiwi.kit.edu/downloads/KITe_WP_139.pdf> (updated
+version coming soon).
 
 The package is presently available via GitHub only. To install the
 package, use

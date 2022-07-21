@@ -788,7 +788,7 @@ validate_forecasthistogram <- function(x){
 #' @param style Either "Gaussian" or "Random". "Gaussian" means that histogram has (approximate) bell shape.
 #' @param n_bins Number of bins that receive strictly positive probability. Defaults to \code{NULL} (random number of bins). Relevant only if \code{style == "Random"}.
 #' @param enforce_adjacent Whether to enforce adjacency of bins (defaults to \code{TRUE}). Relevant only if \code{style == "Random"}.
-#' @details Bin definitions of random histogram are as in the Survey of Consumer Forecasts data set.
+#' @details Bin definitions of random histogram are as in the Survey of Consumer Expectations data set.
 #' @examples
 #' # Draw random histogram
 #' x <- forecasthistogram_example()
