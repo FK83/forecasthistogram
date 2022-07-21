@@ -2,7 +2,10 @@
 #' @importFrom dplyr if_else
 #' @importFrom stats quantile integrate optim optimize pnorm rexp uniroot
 #' @importFrom graphics lines matplot points
-#' @importFrom utils head
+#' @importFrom utils head globalVariables
+
+# define global variables (merely to avoid note when checking the package)
+utils::globalVariables(c("x1", "x2", "y1", "y2"))
 
 # handles NAs and transforms non-NAs to [0,1] interval
 # (used for raw SCE data)
@@ -215,8 +218,8 @@ quantify <- function(x, ...){
 #' @param fit_support whether to choose support according to statistical criterium (default is \code{TRUE})
 #' @param support_limit defaults to 38 (relevant only if \code{fit_support == FALSE})
 #' @param ... other inputs (currently not in use)
-#' @return object of class `forecasthistogram'. Use function \code{quantile.forecasthistogram} to compute quantiles, \code{plot.forecasthistogram} for plotting,
-#' \code{mean.forecasthistogram} and \code{var.forecasthistogram} for computing implied mean and variance.
+#' @return object of class `forecasthistogram'. Use function \code{quantile.forecasthistogram} to compute quantiles, \code{plot.forecasthistogram} for plotting, and
+#' \code{mean.forecasthistogram} for computing the implied mean.
 #' @details The function fits a parametric distribution based on the histogram probabilities in \code{p}. The fitting procedure has been proposed by
 #' Engelberg et al. (2009). Briefly, the method fits a generalized beta distribution if \code{p} features 3 or more bins,
 #' and fits a simpler triangular distribution if \code{p} features at most two bins. See Krüger and Pavlova (2020, Appendix A) for details on the
@@ -298,19 +301,6 @@ mean.forecasthistogram <- function(x, ...){
     message("Histogram quantified for mean computation")
   }
   x$moments[1]
-}
-
-#' Compute variance of fitted histogram
-#' @export
-#' @param x object of class \code{forecasthistogram}
-#' @param ... additional parameters, currently not in use
-var.forecasthistogram <- function(x, ...){
-  # if x has not been quantified yet
-  if (is.null(x$method)){
-    x <- quantify.forecasthistogram(x)
-    message("Histogram quantified for mean computation")
-  }
-  (x$moments[2]^2)
 }
 
 fit_hist_gb <- function(ub, p, fit_support = TRUE, support_limit = 38){

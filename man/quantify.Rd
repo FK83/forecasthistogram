@@ -22,8 +22,8 @@
 \item{...}{other inputs (currently not in use)}
 }
 \value{
-object of class `forecasthistogram'. Use function \code{quantile.forecasthistogram} to compute quantiles, \code{plot.forecasthistogram} for plotting,
-\code{mean.forecasthistogram} and \code{var.forecasthistogram} for computing implied mean and variance.
+object of class `forecasthistogram'. Use function \code{quantile.forecasthistogram} to compute quantiles, \code{plot.forecasthistogram} for plotting, and
+\code{mean.forecasthistogram} for computing the implied mean.
 }
 \description{
 Fit parametric distribution to histogram probabilities
