@@ -21,7 +21,7 @@ The package is presently available via GitHub only.
 # Load forecasthistogram package
 library(forecasthistogram)
 # load magrittr package for pipe operator
-library(magrittr) 
+library(magrittr)
 ```
 
 ## Example
