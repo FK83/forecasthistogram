@@ -11,12 +11,14 @@ Pavlova, available at
 <https://econpapers.wiwi.kit.edu/downloads/KITe_WP_139.pdf> (updated
 version coming soon).
 
-The package is presently available via GitHub only. To install the
-package, use the following:
+The package is presently available via GitHub only.
 
 ``` r
-#library(remotes)
-#install_github("FK83/forecasthistogram")
+# Use next two lines to install package from GitHub
+# library(remotes)
+# install_github("FK83/forecasthistogram")
+
+# Load forecasthistogram package
 library(forecasthistogram)
 # load magrittr package for pipe operator
 library(magrittr) 
