@@ -8,8 +8,7 @@ study subjective probabilities (‘forecast histograms’) as collected in
 several economic surveys. The package accompanies the paper ‘Quantifying
 subjective uncertainty in survey expectations’ by Fabian Krüger and Lora
 Pavlova, available at
-<https://econpapers.wiwi.kit.edu/downloads/KITe_WP_139.pdf> (updated
-version coming soon).
+<https://ewifo.econ.kit.edu/downloads/KruegerPavlova2022.pdf>.
 
 The package is presently available via GitHub only.
 
