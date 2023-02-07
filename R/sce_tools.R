@@ -158,9 +158,14 @@ plot.forecasthistogram <- function(x, ylim = NULL, outer_width = 3, ...){
     # Add curve
     if (x$method == "gbeta"){
       ff <- function(z){
+        # density of generalized beta distribution
         ret <- auxf(z, a = x$parameters[1], b = x$parameters[2],
                     l = x$parameters[3], r = x$parameters[4])
-        ret[is.na(ret)] <- 0
+        # assign zero for NAs and values outside support
+        zero_sel <- is.na(ret) | (z < x$parameters[3]) |
+          (z > x$parameters[4])
+        ret[zero_sel] <- 0
+        # return vector
         ret
       }
     } else {
@@ -178,10 +183,10 @@ plot.forecasthistogram <- function(x, ylim = NULL, outer_width = 3, ...){
 
 # Function to numerically recover quantile from CDF function
 q_from_cdf <- function(cdf, alpha, lims){
-  auxf <- function(x){
+  auxd <- function(x){
     (cdf(x)-alpha)^2
   }
-  out_tmp <- optimize(auxf, interval = lims)
+  out_tmp <- optimize(auxd, interval = lims)
   if (out_tmp$objective > 1e-6){
     stop("Failed to find quantile")
   } else {
@@ -373,19 +378,24 @@ fit_hist_gb <- function(ub, p, fit_support = TRUE, support_limit = 38){
     ff2 <- function(th){
       if_else(any(th[1:2] > 3.5) |
                 (th[3] > ub[1]) |
-                (th[4] < largest_finite), 10, ff(th))
+                (th[4] < largest_finite) |
+                any(abs(th[3:4]) > support_limit),
+              10, ff(th))
     }
   } else if (cs == 2){
     # only left limit unknown
     ff2 <- function(th){
       if_else(any(th[1:2] > 3.5) |
-                (th[3] > ub[1]), 10, ff(th))
+                (th[3] > ub[1]) |
+                (abs(th[3]) > support_limit),
+              10, ff(th))
     }
   } else if (cs == 3){
     # only right limit unknown
     ff2 <- function(th){
       if_else(any(th[1:2] > 3.5) |
-                (th[3] < largest_finite), 10, ff(th))
+                (th[3] < largest_finite) |
+                (th[3] > support_limit), 10, ff(th))
     }
   } else if (cs == 4){
     # both limits known
