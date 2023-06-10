@@ -124,7 +124,8 @@ rps_mat <- function(p, kstar){
 #' @param outer_width support extension in case of infinite limits
 #' @param ylim support limit for vertical axis (defaults to \code{NULL}, useful to make several comparable plots)
 #' @return plot (ggplot2 object)
-plot.forecasthistogram <- function(x, ylim = NULL, outer_width = 3, ...){
+plot.forecasthistogram <- function(x, ylim = NULL, outer_width = 3,
+                                   round_x_labels = FALSE, ...){
   ub <- x$ub
   p <- x$p
   # length of p vector
@@ -142,10 +143,18 @@ plot.forecasthistogram <- function(x, ylim = NULL, outer_width = 3, ...){
                   x2 = c(ub[-lp], ub[lp]),
                   y1 = rep(0, lp),
                   y2 = p_t)
+  # labels for x axis of plot
+  x_labels <- ub[-lp]
+  if (round_x_labels){
+    x_labels <- sprintf("%.1f", ub[-lp])
+  }
   # Make plot
-  g <- ggplot(d, aes(xmin=x1, xmax=x2, ymin=y1, ymax=y2)) +
-    geom_rect(col = "black", alpha = .5) + theme_minimal() +
-    scale_x_continuous(breaks = ub[-lp]) +
+  g <- ggplot(data.frame()) +
+    geom_rect(data = d,
+              aes(xmin=x1, xmax=x2, ymin=y1, ymax=y2),
+              col = "black", alpha = .5) + theme_minimal() +
+    scale_x_continuous(breaks = ub[-lp],
+                       labels = x_labels) +
     theme(panel.grid.major.x = element_blank(),
           panel.grid.minor.x = element_blank(),
           panel.grid.major.y = element_line(size=.1, color="black"),
@@ -791,6 +800,13 @@ validate_forecasthistogram <- function(x){
   check_p(x$p)
   # return x
   x
+}
+
+forecasthistogram_from_quantiles <- function(x, probs, upper_bound = Inf){
+  p_tmp <- c(probs[1], diff(probs))
+  p <- c(p_tmp, 1 - sum(p_tmp))
+  ub <- c(x, upper_bound)
+  forecasthistogram(p, ub)
 }
 
 #' Draw example histogram
