@@ -123,6 +123,7 @@ rps_mat <- function(p, kstar){
 #' @param ... additional parameters (currently not in use)
 #' @param outer_width support extension in case of infinite limits
 #' @param ylim support limit for vertical axis (defaults to \code{NULL}, useful to make several comparable plots)
+#' @param round_x_labels if \code{TRUE}, round labels (bin limits) to one decimal
 #' @return plot (ggplot2 object)
 plot.forecasthistogram <- function(x, ylim = NULL, outer_width = 3,
                                    round_x_labels = FALSE, ...){

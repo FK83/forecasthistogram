@@ -4,7 +4,7 @@
 \alias{plot.forecasthistogram}
 \title{Function to visualize SCE histogram forecast using ggplot2}
 \usage{
-\method{plot}{forecasthistogram}(x, ylim = NULL, outer_width = 3, ...)
+\method{plot}{forecasthistogram}(x, ylim = NULL, outer_width = 3, round_x_labels = FALSE, ...)
 }
 \arguments{
 \item{x}{object of class `forecasthistogram'}
@@ -12,6 +12,8 @@
 \item{ylim}{support limit for vertical axis (defaults to \code{NULL}, useful to make several comparable plots)}
 
 \item{outer_width}{support extension in case of infinite limits}
+
+\item{round_x_labels}{if \code{TRUE}, round labels (bin limits) to one decimal}
 
 \item{...}{additional parameters (currently not in use)}
 }

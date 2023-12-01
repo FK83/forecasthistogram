@@ -3,12 +3,13 @@ forecasthistogram
 
 ## About
 
-This is an in-progress R package that contains functions to handle and
-study subjective probabilities (‘forecast histograms’) as collected in
-several economic surveys. The package accompanies the paper ‘Quantifying
-subjective uncertainty in survey expectations’ by Fabian Krüger and Lora
-Pavlova, available at
-<https://ewifo.econ.kit.edu/downloads/KruegerPavlova2022.pdf>.
+This R package contains functions to handle and study subjective
+probabilities (‘forecast histograms’) as collected in several economic
+surveys. The package accompanies the paper ‘Quantifying subjective
+uncertainty in survey expectations’ by Fabian Krüger and Lora Pavlova,
+open access available at
+<https://doi.org/10.1016/j.ijforecast.2023.06.001> (International
+Journal of Forecasting).
 
 The package is presently available via GitHub only.
 
